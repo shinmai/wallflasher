@@ -45,7 +45,7 @@ image files:
 ## Utility commands
 for convenience `wallflasher wallpaper-info` prints the expected filenames and resolutions for all defined workspaces:
 ```
-> wallflasher.exe wallpaper-info                                                             20:32
+> wallflasher.exe wallpaper-info
 
 sam71a85130eb7b41uid20741_mainl.jpg : 1920x1080
 sam71a85130eb7b41uid20741_discord.jpg : 1920x1080
@@ -62,3 +62,7 @@ wallflasher loads ALL .jpg files from wallpapers\ into memory
 only keep wallpapers (or symlinks to wallpapers) that you actually use in that directory  
 there is currently no deduplication of image data. if multiple symlinked files point to the same image, each one will still be loaded separately into RAM  
 like i said, this thing is not elegant or clever
+
+## Building
+`MSBuild.exe" wallflasher.sln /p:Configuration=Release /p:Platform=x64`  
+Works on **My** Machine™ certified.
