@@ -60,9 +60,29 @@ if you change wallpaper files, run `wallflasher reload`, this hot-reloads `wallp
 ## Notes
 wallflasher loads ALL .jpg files from wallpapers\ into memory  
 only keep wallpapers (or symlinks to wallpapers) that you actually use in that directory  
-there is currently no deduplication of image data. if multiple symlinked files point to the same image, each one will still be loaded separately into RAM  
+~~there is currently no deduplication of image data. if multiple symlinked files point to the same image, each one will still be loaded separately into RAM~~  
 like i said, this thing is not elegant or clever
 
+## performance update
+wallflasher now deduplicates identical files to save RAM. it also no longer stores raw uncompressed bitmaps in RAM, instead storing the actual JPEG files, and decoding them as needed. this adds some latency (somewhat mitigated by decoding with libjpeg-turbo instead of GDI+), but brings big RAM savings.  
+based on benchmarks, the latency should be acceptable even for users with multiple high-resolution displays:
+
+### decoding time for 4 3840x2160 JPEGs at once from RAM
+(200 iterations, P99)
+
+| decoder| real-life| worst-case|FHD control(rl/wc) |
+|-----|-----|-----|-----|
+| GDI+| **293**.1193 ms| **753**.4971 ms| **58**.1278/**179**.3373 ms |
+| TurboJPEG| **103**.2678 ms| **620**.5526 ms| **26**.5035/**151**.3827 ms |
+
+the FHD control for real-life data with GDI+ was the yardstick, and TurboJPG being 1.77x slower with 4k isnt _great_ but is acceptable for a niche edge case like 4 workspaces changing wallpapers at once
+
 ## Building
-`MSBuild.exe" wallflasher.sln /p:Configuration=Release /p:Platform=x64`  
+`MSBuild.exe wallflasher.sln /p:Configuration=Release /p:Platform=x64`  
 Works on **My** Machine™ certified.
+
+## Demo
+Quickly illustrating the issue wallflasher was written to solve, and showing how it performs on my modest desktop PC.
+
+https://github.com/user-attachments/assets/2140b7df-d768-4174-a660-ef8391ee07eb
+
