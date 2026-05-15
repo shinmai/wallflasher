@@ -3,3 +3,5 @@
 /x64/
 *.md
 /*.cmd
+/bench/
+compile_commands.json
