@@ -119,12 +119,12 @@
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>bench\vendor\libjpeg-turbo\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>vendor\libjpeg-turbo\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>bench\vendor\libjpeg-turbo\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>vendor\libjpeg-turbo\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -138,17 +138,17 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>bench\vendor\libjpeg-turbo\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>vendor\libjpeg-turbo\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>bench\vendor\libjpeg-turbo\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>vendor\libjpeg-turbo\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>copy /Y "$(ProjectDir)bench\vendor\libjpeg-turbo\bin\turbojpeg.dll" "$(OutDir)"</Command>
+      <Command>copy /Y "$(ProjectDir)vendor\libjpeg-turbo\bin\turbojpeg.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
