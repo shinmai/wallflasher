@@ -80,3 +80,9 @@ the FHD control for real-life data with GDI+ was the yardstick, and TurboJPG bei
 ## Building
 `MSBuild.exe" wallflasher.sln /p:Configuration=Release /p:Platform=x64`  
 Works on **My** Machine™ certified.
+
+## Demo
+Quickly illustrating the issue wallflasher was written to solve, and showing how it performs on my modest desktop PC.
+
+https://github.com/user-attachments/assets/2140b7df-d768-4174-a660-ef8391ee07eb
+
