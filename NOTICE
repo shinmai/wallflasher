@@ -1,0 +1,62 @@
+Third-party notices
+===================
+
+This project includes the libjpeg-turbo runtime DLL and uses the TurboJPEG API.
+
+libjpeg-turbo is covered by compatible BSD-style open source licenses,
+including the Independent JPEG Group License and the Modified 3-clause BSD
+License.
+
+This software is based in part on the work of the Independent JPEG Group.
+
+The libjpeg-turbo license notice follows.
+
+-------------------------------------------------------------------------------
+
+libjpeg-turbo
+=============
+
+libjpeg-turbo is covered by two compatible BSD-style open source licenses:
+
+- The IJG (Independent JPEG Group) License, which applies to the libjpeg API
+  library and associated programs, including any code inherited from libjpeg
+  and any modifications to that code.
+
+- The Modified (3-clause) BSD License, which applies to the TurboJPEG API
+  library and associated programs.
+
+The TurboJPEG API library wraps the libjpeg API library, so in the context of
+the overall TurboJPEG API library, both the terms of the IJG License and the
+terms of the Modified (3-clause) BSD License apply.
+
+-------------------------------------------------------------------------------
+
+The Modified (3-clause) BSD License
+===================================
+
+Copyright (C) 2009-2026 D. R. Commander
+Copyright (C) 2018-2023 Randy <randy408@protonmail.com>
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+- Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+- Neither the name of the libjpeg-turbo Project nor the names of its
+  contributors may be used to endorse or promote products derived from this
+  software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS",
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.

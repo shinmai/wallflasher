@@ -1,5 +1,5 @@
 #include <windows.h>
-#include <gdiplus.h>
+#include <turbojpeg.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -11,8 +11,10 @@
 #include <string_view>
 #include <atomic>
 #include <shellapi.h>
+#include <functional>
+#include <set>
 
-#pragma comment(lib, "gdiplus.lib")
+#pragma comment(lib, "turbojpeg.lib")
 #pragma comment(lib, "shell32.lib")
 
 #define JSMN_STATIC
@@ -26,10 +28,25 @@ static constexpr wchar_t WALLFLASHER_MUTEX_NAME[] = L"Local\\WallFlasher.SingleI
 static constexpr wchar_t WALLFLASHER_UNLOAD_EVENT_NAME[] = L"Local\\WallFlasher.UnloadEvent";
 static constexpr wchar_t WALLFLASHER_RELOAD_EVENT_NAME[] = L"Local\\WallFlasher.ReloadEvent";
 
+struct FileIdentity {
+    DWORD volumeSerial = 0;
+    DWORD fileIndexHigh = 0;
+    DWORD fileIndexLow = 0;
+    bool valid = false;
+    bool operator==(const FileIdentity& o) const {
+        return valid && o.valid && volumeSerial == o.volumeSerial && fileIndexHigh == o.fileIndexHigh && fileIndexLow == o.fileIndexLow;
+    }
+};
+
+struct FileIdentityHash {
+    size_t operator()(const FileIdentity& id) const {
+        return ((size_t)id.volumeSerial << 32) ^ ((size_t)id.fileIndexHigh << 16) ^ (size_t)id.fileIndexLow;
+    }
+};
+
 struct WallpaperEntry {
-    HBITMAP hBitmap = nullptr;
-    HDC hdc = nullptr;
-    HGDIOBJ oldObject = nullptr;
+    std::vector<uint8_t> jpegData;
+    int refCount = 1;
 };
 
 struct ParsedMonitorState {
@@ -67,8 +84,7 @@ struct AppState {
     HINSTANCE hInst = nullptr;
     HWND hwnd = nullptr;
     std::atomic_bool running{ true };
-    ULONG_PTR gdiplusToken = 0;
-    std::unordered_map<std::wstring, WallpaperEntry> wallpaperCache;
+    std::unordered_map<std::wstring, WallpaperEntry*> wallpaperCache;
     std::vector<MonitorInfo> monitors;
     PendingWorkspaceUpdate pending;
     HANDLE hPipe = INVALID_HANDLE_VALUE;
@@ -104,9 +120,7 @@ static int TokenAfter(const jsmntok_t* tokens, int tokCount, int idx) {
     int next = idx + 1;
     if (tokens[idx].type == JSMN_OBJECT || tokens[idx].type == JSMN_ARRAY) {
         const int end = tokens[idx].end;
-        while (next < tokCount && tokens[next].start < end) {
-            ++next;
-        }
+        while (next < tokCount && tokens[next].start < end) ++next;
     }
     return next;
 }
@@ -529,14 +543,14 @@ static WallpaperEntry* ResolveWallpaper(AppState* state, const std::wstring& dev
     if (!deviceKey.empty() && !workspace.empty()) {
         const std::wstring exactKey = deviceKey + L"_" + workspace;
         auto it = state->wallpaperCache.find(exactKey);
-        if (it != state->wallpaperCache.end()) return &it->second;
+        if (it != state->wallpaperCache.end()) return it->second;
     }
     if (!deviceKey.empty()) {
         auto it = state->wallpaperCache.find(deviceKey);
-        if (it != state->wallpaperCache.end()) return &it->second;
+        if (it != state->wallpaperCache.end()) return it->second;
     }
     auto it = state->wallpaperCache.find(L"wallpaper");
-    return it != state->wallpaperCache.end() ? &it->second : nullptr;
+    return it != state->wallpaperCache.end() ? it->second : nullptr;
 }
 
 static void ReloadWallpapersAndLayout(AppState* state) {
@@ -647,16 +661,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
         return 1;
     }
 
-    Gdiplus::GdiplusStartupInput gdiplusInput;
-    if (Gdiplus::GdiplusStartup(&state.gdiplusToken, &gdiplusInput, nullptr) != Gdiplus::Ok) {
-        CloseHandle(state.hReloadEvent);
-        CloseHandle(state.hUnloadEvent);
-        DeleteCriticalSection(&state.pending.lock);
-        ReleaseMutex(state.hSingleInstanceMutex);
-        CloseHandle(state.hSingleInstanceMutex);
-        return 1;
-    }
-
     LoadWallpapers(&state);
     std::vector<ParsedMonitorState> initParsed;
     {
@@ -673,7 +677,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
     if (!RegisterClassExW(&wc)) {
         FreeWallpapers(&state);
-        Gdiplus::GdiplusShutdown(state.gdiplusToken);
         CloseHandle(state.hReloadEvent);
         CloseHandle(state.hUnloadEvent);
         DeleteCriticalSection(&state.pending.lock);
@@ -698,7 +701,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_LAYERED, wc.lpszClassName, L"WallFlasher", WS_POPUP, windowX, windowY, windowW, windowH, nullptr, nullptr, hInstance, &state);
     if (!hwnd) {
         FreeWallpapers(&state);
-        Gdiplus::GdiplusShutdown(state.gdiplusToken);
         CloseHandle(state.hReloadEvent);
         CloseHandle(state.hUnloadEvent);
         DeleteCriticalSection(&state.pending.lock);
@@ -714,7 +716,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     if (!state.hControlThread) {
         DestroyWindow(hwnd);
         FreeWallpapers(&state);
-        Gdiplus::GdiplusShutdown(state.gdiplusToken);
         CloseHandle(state.hReloadEvent);
         CloseHandle(state.hUnloadEvent);
         DeleteCriticalSection(&state.pending.lock);
@@ -779,7 +780,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     }
     if (IsWindow(hwnd)) DestroyWindow(hwnd);
     FreeWallpapers(&state);
-    Gdiplus::GdiplusShutdown(state.gdiplusToken);
 
     CloseHandle(state.hReloadEvent);
     CloseHandle(state.hUnloadEvent);
@@ -882,6 +882,75 @@ static std::wstring ToLower(std::wstring s) {
     return s;
 }
 
+static FileIdentity GetFileIdentity(const std::wstring& path) {
+    FileIdentity id;
+    HANDLE h = CreateFileW(path.c_str(), 0, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return id;
+    BY_HANDLE_FILE_INFORMATION info;
+    if (GetFileInformationByHandle(h, &info)) {
+        id.volumeSerial  = info.dwVolumeSerialNumber;
+        id.fileIndexHigh = info.nFileIndexHigh;
+        id.fileIndexLow  = info.nFileIndexLow;
+        id.valid = true;
+    }
+    CloseHandle(h);
+    return id;
+}
+
+static std::vector<uint8_t> ReadFileBytes(const std::wstring& path) {
+    std::vector<uint8_t> data;
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return data;
+    const DWORD size = GetFileSize(h, nullptr);
+    if (size == INVALID_FILE_SIZE || size == 0) { CloseHandle(h); return data; }
+    data.resize(size);
+    DWORD read = 0;
+    if (!ReadFile(h, data.data(), size, &read, nullptr) || read != size)
+        data.clear();
+    CloseHandle(h);
+    return data;
+}
+
+static bool DecodeJpegToBitmap(const std::vector<uint8_t>& jpegData,
+                               HBITMAP* outBmp, HDC* outDc, HGDIOBJ* outOld) {
+    if (jpegData.empty()) return false;
+    tjhandle tj = tjInitDecompress();
+    if (!tj) return false;
+    int w = 0, h = 0, subsamp = 0, cs = 0;
+    if (tjDecompressHeader3(tj, jpegData.data(), (unsigned long)jpegData.size(), &w, &h, &subsamp, &cs) != 0) {
+        tjDestroy(tj);
+        return false;
+    }
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = w;
+    bmi.bmiHeader.biHeight = -h;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    HDC screenDc = GetDC(nullptr);
+    void* bits = nullptr;
+    *outBmp = CreateDIBSection(screenDc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    ReleaseDC(nullptr, screenDc);
+    if (!*outBmp || !bits) { tjDestroy(tj); return false; }
+    if (tjDecompress2(tj, jpegData.data(), (unsigned long)jpegData.size(), (unsigned char*)bits, w, 0, h, TJPF_BGRX, TJFLAG_FASTDCT) != 0) {
+        tjDestroy(tj);
+        DeleteObject(*outBmp); *outBmp = nullptr;
+        return false;
+    }
+    tjDestroy(tj);
+    *outDc = CreateCompatibleDC(nullptr);
+    if (!*outDc) { DeleteObject(*outBmp); *outBmp = nullptr; return false; }
+    *outOld = SelectObject(*outDc, *outBmp);
+    if (!*outOld) { DeleteDC(*outDc); DeleteObject(*outBmp); *outDc = nullptr; *outBmp = nullptr; return false; }
+    return true;
+}
+
+static void FreeDecodedBitmap(HBITMAP hBmp, HDC hDc, HGDIOBJ oldObj) {
+    if (hDc) { SelectObject(hDc, oldObj); DeleteDC(hDc); }
+    if (hBmp) DeleteObject(hBmp);
+}
+
 static void LoadWallpapers(AppState* state) {
     wchar_t exePath[MAX_PATH];
     const DWORD exePathLen = GetModuleFileNameW(nullptr, exePath, MAX_PATH);
@@ -892,50 +961,73 @@ static void LoadWallpapers(AppState* state) {
     const std::wstring wallpaperDir = std::wstring(exePath) + L"\\wallpapers\\";
     const std::wstring pattern = wallpaperDir + L"*.jpg";
 
+    std::unordered_map<FileIdentity, WallpaperEntry*, FileIdentityHash> seenById;
+
     WIN32_FIND_DATAW findData = {};
     HANDLE findHandle = FindFirstFileW(pattern.c_str(), &findData);
     if (findHandle == INVALID_HANDLE_VALUE) return;
+    WallpaperEntry* existing = nullptr;
     do {
         if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
         const std::wstring filename = findData.cFileName;
         const std::wstring fullPath = wallpaperDir + filename;
         const size_t dot = filename.find_last_of(L'.');
         const std::wstring key = ToLower(dot == std::wstring::npos ? filename : filename.substr(0, dot));
-        Gdiplus::Bitmap bitmap(fullPath.c_str());
-        if (bitmap.GetLastStatus() != Gdiplus::Ok) continue;
-        HBITMAP hBitmap = nullptr;
-        if (bitmap.GetHBITMAP(Gdiplus::Color(0, 0, 0), &hBitmap) != Gdiplus::Ok || !hBitmap) continue;
-        WallpaperEntry entry;
-        entry.hBitmap = hBitmap;
-        entry.hdc = CreateCompatibleDC(nullptr);
-        if (!entry.hdc) {
-            DeleteObject(entry.hBitmap);
-            continue;
+
+        existing = nullptr;
+
+        const FileIdentity identity = GetFileIdentity(fullPath);
+        if (identity.valid) {
+            auto seenIt = seenById.find(identity);
+            if (seenIt != seenById.end()) existing = seenIt->second;
         }
-        entry.oldObject = SelectObject(entry.hdc, entry.hBitmap);
-        if (!entry.oldObject) {
-            DeleteDC(entry.hdc);
-            DeleteObject(entry.hBitmap);
-            continue;
+
+        if (!existing) {
+            std::vector<uint8_t> fileData = ReadFileBytes(fullPath);
+            if (fileData.empty()) continue;
+
+            for (auto& [ekey, eptr] : state->wallpaperCache) {
+                if (eptr->jpegData.size() != fileData.size()) continue;
+                const size_t quickLen = fileData.size() < 256 ? fileData.size() : 256;
+                if (memcmp(eptr->jpegData.data(), fileData.data(), quickLen) != 0) continue;
+                if (memcmp(eptr->jpegData.data(), fileData.data(), fileData.size()) != 0) continue;
+                existing = eptr;
+                break;
+            }
+
+            if (!existing) {
+                WallpaperEntry* entry = new WallpaperEntry();
+                entry->jpegData = std::move(fileData);
+                entry->refCount = 1;
+                auto oldIt = state->wallpaperCache.find(key);
+                if (oldIt != state->wallpaperCache.end())
+                    if (oldIt->second && --oldIt->second->refCount <= 0) delete oldIt->second;
+                state->wallpaperCache[key] = entry;
+                if (identity.valid) seenById[identity] = entry;
+                continue;
+            }
         }
-        auto old = state->wallpaperCache.find(key);
-        if (old != state->wallpaperCache.end()) {
-            SelectObject(old->second.hdc, old->second.oldObject);
-            DeleteDC(old->second.hdc);
-            DeleteObject(old->second.hBitmap);
-        }
-        state->wallpaperCache[key] = entry;
+
+        auto oldIt = state->wallpaperCache.find(key);
+        if (oldIt != state->wallpaperCache.end()) {
+            if (oldIt->second != existing) {
+                if (oldIt->second && --oldIt->second->refCount <= 0) delete oldIt->second;
+                existing->refCount++;
+            }
+        } else existing->refCount++;
+        state->wallpaperCache[key] = existing;
     } while (FindNextFileW(findHandle, &findData));
     FindClose(findHandle);
 }
 
 static void FreeWallpapers(AppState* state) {
     for (auto& monitor : state->monitors) monitor.currentWallpaper = nullptr;
+    std::set<WallpaperEntry*> seen;
     for (auto& pair : state->wallpaperCache) {
-        WallpaperEntry& entry = pair.second;
-        SelectObject(entry.hdc, entry.oldObject);
-        DeleteDC(entry.hdc);
-        DeleteObject(entry.hBitmap);
+        WallpaperEntry* entry = pair.second;
+        if (!entry || seen.count(entry)) continue;
+        seen.insert(entry);
+        delete entry;
     }
     state->wallpaperCache.clear();
 }
@@ -946,12 +1038,20 @@ static void PaintOverlay(AppState* state, HDC hdc, const RECT& clip) {
         RECT intersection = {};
         if (!IntersectRect(&intersection, &rc, &clip)) continue;
         WallpaperEntry* wallpaper = monitor.currentWallpaper;
-        if (!wallpaper) {
+        if (!wallpaper || wallpaper->jpegData.empty()) {
+            FillRect(hdc, &rc, (HBRUSH)GetStockObject(BLACK_BRUSH));
+            continue;
+        }
+        HBITMAP hBmp = nullptr;
+        HDC hMemDc = nullptr;
+        HGDIOBJ oldObj = nullptr;
+        if (!DecodeJpegToBitmap(wallpaper->jpegData, &hBmp, &hMemDc, &oldObj)) {
             FillRect(hdc, &rc, (HBRUSH)GetStockObject(BLACK_BRUSH));
             continue;
         }
         const int w = rc.right - rc.left;
         const int h = rc.bottom - rc.top;
-        BitBlt(hdc, rc.left, rc.top, w, h, wallpaper->hdc, 0, 0, SRCCOPY);
+        BitBlt(hdc, rc.left, rc.top, w, h, hMemDc, 0, 0, SRCCOPY);
+        FreeDecodedBitmap(hBmp, hMemDc, oldObj);
     }
 }
