@@ -462,7 +462,8 @@ static DWORD WINAPI PipeThreadProc(LPVOID param) {
             }
             if (!state->running) break;
             if (message.empty()) break;
-            if (std::string_view(message).substr(0, 60).find("Workspace") == std::string_view::npos)
+            auto sv = std::string_view(message).substr(0, 60);
+            if (sv.find("Workspace") == std::string_view::npos && sv.find("EagerFocus") == std::string_view::npos)
                 continue;
 
             std::vector<ParsedMonitorState> parsed = ParseAllMonitors(message.data(), (int)message.size());
