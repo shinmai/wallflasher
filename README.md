@@ -78,7 +78,7 @@ based on benchmarks, the latency should be acceptable even for users with multip
 the FHD control for real-life data with GDI+ was the yardstick, and TurboJPG being 1.77x slower with 4k isnt _great_ but is acceptable for a niche edge case like 4 workspaces changing wallpapers at once
 
 ## Building
-`MSBuild.exe" wallflasher.sln /p:Configuration=Release /p:Platform=x64`  
+`MSBuild.exe wallflasher.sln /p:Configuration=Release /p:Platform=x64`  
 Works on **My** Machine™ certified.
 
 ## Demo
