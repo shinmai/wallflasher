@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <dwmapi.h>
 #include <turbojpeg.h>
 #include <string>
 #include <unordered_map>
@@ -16,6 +17,7 @@
 
 #pragma comment(lib, "turbojpeg.lib")
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "dwmapi.lib")
 
 #define JSMN_STATIC
 #include "jsmn.h"
@@ -27,6 +29,10 @@ static constexpr DWORD WALLFLASHER_PIPE_BUF_SIZE = 1024 * 1024;
 static constexpr wchar_t WALLFLASHER_MUTEX_NAME[] = L"Local\\WallFlasher.SingleInstance";
 static constexpr wchar_t WALLFLASHER_UNLOAD_EVENT_NAME[] = L"Local\\WallFlasher.UnloadEvent";
 static constexpr wchar_t WALLFLASHER_RELOAD_EVENT_NAME[] = L"Local\\WallFlasher.ReloadEvent";
+
+#ifndef DWMWA_EXCLUDED_FROM_PEEK
+#define DWMWA_EXCLUDED_FROM_PEEK 12
+#endif
 
 struct FileIdentity {
     DWORD volumeSerial = 0;
@@ -96,6 +102,7 @@ struct AppState {
 };
 
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+static void ApplyWindowDwmAttributes(HWND hwnd);
 static std::wstring ToLower(std::wstring s);
 static void LoadWallpapers(AppState* state);
 static void FreeWallpapers(AppState* state);
@@ -576,6 +583,11 @@ static void ReloadWallpapersAndLayout(AppState* state) {
     }
 }
 
+static void ApplyWindowDwmAttributes(HWND hwnd) {
+    BOOL excludedFromPeek = TRUE;
+    DwmSetWindowAttribute(hwnd, DWMWA_EXCLUDED_FROM_PEEK, &excludedFromPeek, sizeof(excludedFromPeek));
+}
+
 // WinMain
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
@@ -710,6 +722,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
         return 3;
     }
     SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+    // Exclude overlay from Aero Peek previews.
+    ApplyWindowDwmAttributes(hwnd);
 
     state.hwnd = hwnd;
 
